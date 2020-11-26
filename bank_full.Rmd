@@ -1,0 +1,181 @@
+---
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
+---
+Importing and summarizing the data
+```{r}
+bank <- read.csv("~/NEU_COURSES/Stastical_methods_in_Eng/Project/bank-full.csv", sep=";")
+```
+```{r}
+summary(bank)
+```
+Checking for duplicates and missing variables
+```{r}
+library(data.table)
+bank <- as.data.table(bank)
+bank[duplicated(bank)]
+sum(!complete.cases(bank))
+sapply(bank, function(x) sum(is.na(x)))
+```
+The data doesn't have any duplicates or missing values.
+
+```{r}
+str(bank)
+```
+
+
+
+The Target variable is skewed towards 0(NO)
+
+Boxplots analyzing Outliers
+```{r}
+library(ggplot2)
+library(pdp)
+p1 <- ggplot(bank, aes(x='', y=age)) + 
+  geom_boxplot()
+p2 <- ggplot(bank, aes(x='', y=balance)) + 
+  geom_boxplot()
+p3 <- ggplot(bank, aes(x='', y=day)) +
+  geom_boxplot()
+p4 <- ggplot(bank, aes(x='', y=duration)) +
+  geom_boxplot()
+p5 <- ggplot(bank, aes(x='', y=campaign)) +
+  geom_boxplot()
+grid.arrange(p1,p2,p3,p4,p5,ncol =3,nrow=2)
+```
+Some Visualizations are performed for better understanding of the data:
+
+```{r}
+barp1 <-ggplot(data=bank, aes(x=y, y='')) +
+  geom_bar(stat="identity", fill="steelblue")+ggtitle("Total Term Deposit Subcriptions") +
+         xlab(" Term Deposit Subscriptions")
+barp1
+```
+
+The Target variable is clearly skewed towards 0(NO)
+
+Barplots:
+```{r}
+barp2 <- ggplot(data = bank, aes(x=job, fill=y)) +
+         geom_bar() +
+         ggtitle("Term Deposit Subscription based on Job") +
+         xlab(" Job") + guides(fill=guide_legend(title="Subscription of Term Deposit")) + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+barp2
+barp3 <- ggplot(data = bank, aes(x=education, fill=y)) + geom_bar() +
+         ggtitle("Term Deposit Subscription based on Education") +
+         xlab("Education") + guides(fill=guide_legend(title="Subscription of Term Deposit")) + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+barp3
+barp4 <- ggplot(data = bank, aes(x=marital, fill=y)) + geom_bar() +
+         ggtitle("Term Deposit Subscription based on Marital") +
+         xlab("Marital") + guides(fill=guide_legend(title="Subscription of Term Deposit")) + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+barp4
+```
+
+Scatterplots:
+
+```{r}
+Scatterp1 <- ggplot(data = bank, aes(x=campaign,y=duration, color=y)) + geom_point() +
+         ggtitle("Duration vs Campaign for Subscription of Term Deposit") +
+         xlab("Campaign") + guides(color=guide_legend(title="Subscription of Term Deposit")) + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+Scatterp1
+```
+Changing Target variable to binary
+```{r}
+bank$y = ifelse(bank$y=='yes',1,0)
+str(bank)
+summary(bank)
+prop.table(table(bank$y))
+```
+Correlation matrix:
+```{r}
+bank.select <- bank[,c(6,7,8,10,11,12,13,17)]
+pairs(bank.select)
+```
+```{r}
+library(GGally)
+bank1 <- bank[,c(1,6,10,12,13,14,17)]
+ggpairs(bank1)
+```
+```{r}
+bank2 <- bank[,c(1,2,3,4,5,6,7,17)]
+pairs(bank2)
+```
+
+```{r}
+bank3 <- bank[,c(8,9,10,11,12,13,14,15,16,17)]
+pairs(bank3)
+```
+
+Splitting Training and testing data:
+
+```{r}
+library(caTools)
+set.seed(123)
+split = sample.split(bank$y,SplitRatio = 0.75)
+training_set = subset(bank, split == TRUE)
+test_set = subset(bank, split == FALSE)
+```
+
+Scaling Numeric Variables
+```{r}
+training_set[,c(1)] <- scale(training_set[,c(1)])
+training_set[,c(6)] <- scale(training_set[,c(6)])
+training_set[,c(10)] <- scale(training_set[,c(10)])
+training_set[,c(12)] <- scale(training_set[,c(12)])
+training_set[,c(13)] <- scale(training_set[,c(13)])
+test_set[,c(1)] <- scale(test_set[,c(1)])
+test_set[,c(6)] <- scale(test_set[,c(6)])
+test_set[,c(10)] <- scale(test_set[,c(10)])
+test_set[,c(12)] <- scale(test_set[,c(12)])
+test_set[,c(13)] <- scale(test_set[,c(13)])
+```
+
+Building a Logistic Regression model:
+```{r}
+classifier.lm = glm(formula = y ~ .,
+                 family = binomial,
+                 data = training_set)
+```
+```{r}
+pred_lm = predict(classifier.lm, type='response', newdata=test_set[,-17])
+```
+```{r}
+predicted_y <- data.frame(y = test_set$y, pred = NA)
+predicted_y$pred <- pred_lm
+```
+Confusion matrix:
+Finding the Optimum Cutoff
+```{r}
+library(InformationValue)
+optCutOff <- optimalCutoff(test_set$y, pred_lm)[1] 
+optCutOff
+```
+```{r}
+Results <- confusionMatrix(test_set$y, pred_lm, threshold = optCutOff)
+Results
+```
+
+Summary of the Regression Model
+
+```{r}
+summary(classifier.lm)
+```
+```{r}
+misClassError(test_set$y, pred_lm, threshold = optCutOff)
+```
+```{r}
+plotROC(test_set$y, pred_lm)
+```
+```{r}
+Concordance(test_set$y, pred_lm)
+```
+```{r}
+sensitivity(test_set$y, pred_lm, threshold = optCutOff)
+specificity(test_set$y, pred_lm, threshold = optCutOff)
+```
+```{r}
+accuracy = (Results['1','1']+Results['0','0'])/(Results['0','1'] + Results['1','0'] + Results['1','1'] + Results['0','0'])
+accuracy
+```
